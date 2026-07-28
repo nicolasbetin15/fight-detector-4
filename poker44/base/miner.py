@@ -196,8 +196,12 @@ class BaseMinerNeuron(BaseNeuron):
         # This loop maintains the miner's operations until intentionally stopped.
         try:
             while not self.should_exit:
+                # Miners never set weights, so metagraph.last_update[uid] stays
+                # pinned at the registration block and would make this wait-loop
+                # exit immediately, turning the outer loop into a tight RPC
+                # hammer. Track our own last sync block instead.
                 while (
-                    self.block - self.metagraph.last_update[self.uid]
+                    self.block - self.last_update
                     < self.config.neuron.epoch_length
                 ):
                     # Wait before checking again.

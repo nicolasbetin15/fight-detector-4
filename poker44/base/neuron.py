@@ -163,16 +163,29 @@ class BaseNeuron(ABC):
             time.sleep(5)
 
     def check_registered(self):
-        # --- Check for registration.
-        if not self.subtensor.is_hotkey_registered(
-            netuid=self.config.netuid,
-            hotkey_ss58=self.wallet.hotkey.ss58_address,
-        ):
-            bt.logging.error(
-                f"Wallet: {self.wallet} is not registered on netuid {self.config.netuid}."
-                f" Please register the hotkey using `btcli subnets register` before trying again"
-            )
-            exit()
+        # --- Check for registration, tolerating transient RPC failures so a
+        # single flaky/rate-limited response does not kill the sync thread.
+        attempts = 5
+        for attempt in range(attempts):
+            try:
+                if self.subtensor.is_hotkey_registered(
+                    netuid=self.config.netuid,
+                    hotkey_ss58=self.wallet.hotkey.ss58_address,
+                ):
+                    return
+                bt.logging.warning(
+                    f"Registration check returned false (attempt {attempt + 1}/{attempts}); retrying"
+                )
+            except Exception as e:
+                bt.logging.warning(
+                    f"Registration check errored (attempt {attempt + 1}/{attempts}): {e}; retrying"
+                )
+            time.sleep(12)
+        bt.logging.error(
+            f"Wallet: {self.wallet} is not registered on netuid {self.config.netuid}."
+            f" Please register the hotkey using `btcli subnets register` before trying again"
+        )
+        exit()
 
     def should_sync_metagraph(self):
         """
